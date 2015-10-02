@@ -1,0 +1,210 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed May 06 17:57:30 2015
+
+@author: Shreyank
+"""
+#importing useful libraries
+import random
+import nltk
+from sklearn import *
+import pickle
+import numpy
+
+test_var = []
+#the main class for the classifier programme, it will get the metrices of
+#performance, using sklearn library for classification
+class simulateClassification(object):
+
+    #constructor for the class
+    def __init__(self, K = 2, data_path = '../output/', classifier = 'bayes',
+                labels = ('pos', 'neg'), num_classes = 2, num_samples = 0):
+        #k for k fold cross validation
+        self.__K = K
+
+        #setting the path for the stored data
+        self.__data_path = data_path
+
+        #loading pre stored data, X is the feature matrix and Y are the labels
+        (self.__X, self.__Y) = self.__loadData()
+
+        #setting the labels of the classes and the number of classes
+        self.__labels = labels
+        self.__W = num_classes
+
+        #setting number samples in the data set
+        self.__N = self.__getNSamples(num_samples)
+
+        #temporary train and test variables for the current cross validation
+        self.__trainx = []
+        self.__trainy = []
+        self.__testx = []
+        self.__testy = []
+
+        #current estimated y by the classifier
+        self.__y_predict = []
+
+        #setting the classifier method
+        self.__method = classifier
+
+        #structure for storing the confusin matrix
+        self.__confusion_matrix = numpy.zeros(shape = (self.__W, 2, 2))
+    ###########################END OF CONSTRUCTOR###############################
+
+    #initializer function for loading the saved data in pickle format
+    def __loadData(self):
+        print('started loading')
+
+        #loading feature matrix and converting it to a numpy matrix
+        X = pickle.load(open(self.__data_path + 'dataX.p', 'r'))
+        X = numpy.matrix(X)
+
+        #loading the labels and converting them to a numpy array
+        Y = pickle.load(open(self.__data_path + 'dataY.p', 'r'))
+        Y = numpy.array(Y)
+
+        #getting random indices for shuffling the data
+        indices = range(len(Y))
+        random.shuffle(indices)
+
+        #shuffling X and Y but maintaining corresponding order
+        X = X[indices]
+        Y = Y[indices]
+
+        #returning the loaded data and storing it in class variable
+        print('finished loading')
+        return (X, Y)
+
+    #initialiser function for getting the number of samples
+    def __getNSamples(self, N):
+        #if user provides number of samples then return that otherwise return
+        #total available number of samples
+        if N == 0:
+            return len(self.__Y)
+        else:
+            return N
+    #############################END OF INITIALISER FUNCTIONS###################
+
+    #this helper function will return the classifier to be used
+    def __getClassifier(self):
+        #Gaussian naive_bayes
+        if self.__method == 'bayes':
+            return naive_bayes.GaussianNB()
+        #svm
+        elif self.__method == 'svm':
+            return svm.SVC(kernel = 'linear')
+        #kNN
+        elif self.__method == 'neighbor':
+            return neighbors.KNeighborsClassifier(n_neighbors = 2)
+        #multinombial naive_bayes
+        elif self.__method == 'bayes_multinom':
+            return naive_bayes.MultinomialNB(alpha = 2, fit_prior = True)
+        #bernaulli naive_bayes
+        elif self.__method == 'bayes_bernoulli':
+            return naive_bayes.BernoulliNB(alpha = 2, binarize = None)
+        #if some junk value then use Gaussian naive bayes
+        else:
+            return naive_bayes.GaussianNB()
+
+    #this helper returns the accuracy
+    def __getAccuracy(self):
+        correct = 0
+        for i in range(len(self.__y_predict)):
+            if self.__y_predict[i] == self.__testy[i]:
+                correct += 1
+
+        acc = (100 * correct) / len(self.__testy)
+        return acc
+
+    #updates the class variable confusion matrix for one particular test sample
+    def __updateConfusionMatrix(self):
+        #calculating confusion matrix considering 1 class positive at a time
+        for i in range(self.__W):
+
+            #going through each test case
+            for j in range(len(self.__testy)):
+
+                #small error detection measure
+                if not len(self.__y_predict) == len(self.__testy):
+                    print('dimensions do not match, something is fishy')
+
+                #increasing the count of the cell in the confusion matrix
+                #corresponding to the current test sample
+                if self.__y_predict[j] == i and self.__testy[j] == i:
+                    self.__confusion_matrix[i, 0, 0] += 1
+                elif (not self.__y_predict[j] == i) and (not self.__testy[j] == i):
+                    self.__confusion_matrix[i, 1, 1] += 1
+                elif (self.__y_predict[j] == i) and (not self.__testy[j] == i):
+                    self.__confusion_matrix[i, 1, 0] += 1
+                elif (not self.__y_predict[j] == i) and (self.__testy[j] == i):
+                    self.__confusion_matrix[i, 0, 1] += 1
+                else:
+                    print('very strange case, difies logic')
+
+    #getting the f1 score using sklearn library
+    def __getF1(self):
+        score = metrics.f1_score(self.__testy, self.__y_predict)
+        return score
+    #############################EMD OF HELPER FUNCTIONS########################
+    #public function returns the data
+    def getXY(self):
+        return(self.__X, self.__Y)
+
+    #public function returns the confusion matrix
+    def getConfusionMatrix(self):
+        return self.__confusion_matrix
+
+    def plotRoc(self):
+        #getting the classifier
+        classifier = self.__getClassifier()
+
+        #training all the data and classifying all data
+        y_scores = classifier.fit(self.__X, self.__Y).predict_proba(self.__X)
+
+        #this structure will store the values for each class
+        (fp, tp, threshold) = metrics.roc_curve(self.__Y, y_scores, pos_label = 0)
+        pass
+
+    #public function runs the simulation with cross validation and prints the
+    #average accuracy and the average f1 score
+    def run(self, method = ''):
+        #setting method if user has provided one
+        if not method == '':
+            self.__method = method
+
+        #choosing the classifier
+        classifier = self.__getClassifier()
+
+        #getting indices for cross validation sets
+        kf = cross_validation.KFold(self.__N, self.__K, shuffle = True)
+
+        #going through each fold and calculating accuracy and f1 score
+        i = 0
+        acc_total = 0
+        f1_total = 0
+        for train_indices, test_indices in kf:
+            i = i + 1
+            #defining subset of train and test data
+
+            self.__trainx = self.__X[train_indices]
+            self.__trainy = self.__Y[train_indices]
+            self.__testx = self.__X[test_indices]
+            self.__testy = self.__Y[test_indices]
+
+            #predicting the classes of test exmaples
+            self.__y_predict = numpy.array(classifier.fit(self.__trainx, self.__trainy).predict(self.__testx))
+
+            #calculating the metrics
+            acc = self.__getAccuracy()
+            f1 = self.__getF1()
+            self.__updateConfusionMatrix()
+            acc_total += acc
+            f1_total += f1
+
+            print 'acc and f1 for the %s th cross validation set = ' %i
+            print acc,  f1
+
+        print 'avg acc = ', float(acc_total / self.__K)
+        print 'avg f1 = ', float(f1_total / self.__K)
+
+    #############################END OF CLASSIFY CLASS##########################
