@@ -1,0 +1,248 @@
+#importing useful librairies
+import os
+import operator
+import random
+
+test_var = {}
+################################################################################
+
+#this class will provide various methods for extracting best features out of the
+#total vocabulary
+class featureSelector(object):
+    #defining the contstructor
+    def __init__(self, labels = ('pos', 'neg'), class_num = 2, num_features = 0,
+                 path_read = '../processed_data/', path_output = '../output/',
+                 method = 'MaxByRest', write = False):
+
+        #setting the labels
+        self.__labels = labels
+
+        #setting number of classes
+        self.__W = class_num
+
+        #setting the number of features
+        self.__D = num_features
+        print(self.__D)
+
+        #setting the path for outputing vocabulary and path for reading data
+        self.__path_read = path_read
+        self.__path_output = path_output
+
+        #original vocabular with all the words
+        self.__org_vocab = self.__getOriginalVocab()
+
+        #filtered vocabulary after featrure selection
+        self.__filt_vocab = {}
+
+        #setting the method for feature selection
+        self.__method = method
+
+        #data structure for stroring document frequencies
+        self.__F_IDF = {}
+        self.__idf_flag = False
+
+        #list of dictionaries to store word count of each word class wise
+        self.__word_count_classwise = []
+        self.__word_count_flag = False
+
+        #setting the flag for writing or not writing filtered vocab in txt file
+        self.__write = write
+    ###############################END OF CONSTRUCTOR###########################
+
+    #this helper function will get the original vocabulary
+    def __getOriginalVocab(self):
+
+        #opening the vocabulary file and loading it in a list
+        path = self.__path_output + 'vocabulary.txt'
+        with open(path, 'r') as f:
+            vocab = f.read().split('\n')
+
+        #converting list to dictionary
+        vocab = dict((word, 0) for word in vocab)
+
+        return vocab
+
+    def __writeFilteredVocab(self):
+        print 'writing filtered vocabulary'
+        #setting the path for writing filtered vocab
+        path = self.__path_output + 'vocabulary_filtered.txt'
+
+        #writing the filtered vocab in a txt file separated by '\n'
+        with open(path, 'w') as f:
+            f.write('\n'.join(self.__filt_vocab.keys()))
+
+    ####################END OF INITIALISING FUNCTIONS###########################
+
+    #calculates the document frequency of each word
+    def __getF_IDF(self):
+        #initializing each word's document frequncy to zero
+        DF = dict(self.__org_vocab)
+
+        #contains all the words in the vocabular initialized to zero
+        empty_dict = dict(DF)
+
+        #total count of each word
+        count = dict(DF)
+
+        #going through each document
+        for i in range(self.__W):
+            #path for each class
+            path = self.__path_read + self.__labels[i]
+            #contains all the file names for a class
+            fileids = os.listdir(path)
+
+            #going through each document
+            for j in range(len(fileids)):
+                #constructing a temporary dict to store presence or
+                #absence of each word in the current document
+                temp_dict = dict(empty_dict)
+
+                #getting all the words in the document
+                with open(path + '/' + fileids[j], 'r') as f:
+                    words = f.read()
+                words = words.split()
+
+                #updating temp dict and count of each word
+                for word in words:
+                    temp_dict[word] = 1
+                    count[word] += 1
+
+                #after each document is read and temp_dict updated,
+                #document frequencies needs to be updated
+                #print 'updating DF with i, j = ', i, j
+                for word in DF.keys():
+                    DF[word] = DF[word] + temp_dict[word]
+
+        #calcularing the frequncy - inverse document frequency score
+        for word in DF.keys():
+            self.__F_IDF[word] = count[word] / DF[word]
+
+        self.__idf_flag = True
+
+    def __fillWordCount(self):
+
+        #asking for a copy of empty dictionary with vocabulary as the keys
+        #defaulting with value = 1 to prevent division by 0
+        empty_dict = dict(self.__org_vocab)
+
+        for key in empty_dict.keys():
+            empty_dict[key] = 1
+
+        #starting the loops for going through each file
+        for i in range(self.__W):
+            path = self.__path_read + self.__labels[i]
+            fileids = os.listdir(path)
+
+            #constructing temporary dictionary for this class
+            temp_dict = dict(empty_dict)
+
+            #going through each file of the current class
+            for j in range(len(fileids)):
+                #print 'updating score classwise with i, j = ', i, j
+                with open(path + '/' + fileids[j]) as f:
+                    words = f.read().split()
+
+                #storing the total count for each class
+                for word in words:
+                    temp_dict[word] += 1
+
+            #appending the count dictionary of this class to main count list
+            self.__word_count_classwise.append(temp_dict)
+
+        #setting the flag to prevent re run of this function
+        self.__word_count_flag = True
+
+        #small error correcting measure
+        if not len(self.__word_count_classwise) == self.__W:
+            print 'hmm, something is not right here'
+
+    #this helper will return a dictionary of max by rest (custom) scores
+    def __getMaxByRestScores(self):
+        #just making sure that word counts for each class exist
+        if self.__word_count_flag == False:
+            self.__fillWordCount()
+
+        #asking for an empty vocabulary lsit in the form of a dict if not given
+        scoreDict = dict(self.__org_vocab)
+
+        #calcularing score for each word
+        for word in scoreDict.keys():
+            temp1 = max(self.__word_count_classwise[i][word] for i in range(self.__W))
+            temp2 = sum(self.__word_count_classwise[i][word] for i in range(self.__W)) - temp1
+            score = ((self.__W - 1) * temp1) / temp2
+            scoreDict[word] = score
+
+        return scoreDict
+
+    def __getFiltVocab(self):
+
+        print 'setting the filtered vocabulary dictionary'
+
+        #filter features according to the method chosen by the user
+        if self.__method == 'idf':
+            #this will temporarily store the refined vocabulary
+            vocab_refined  = {}
+
+            #only calculate idf scores if not calculated earlier as it
+            #is a very costly operation
+            if self.__idf_flag == False:
+                self.__getF_IDF()
+
+            #this will sort the idf keys by their values and return a
+            #list of tuple of the form (word, idf) in descending order
+            temp_idf = sorted(self.__F_IDF.items(),
+                       key = operator.itemgetter(1), reverse = True)
+
+            #store the top number of feature words with highest idfs
+            for i in range(self.__D):
+                vocab_refined[temp_idf[i][0]] = 0
+
+            #setting the filtered vocabulary
+            self.__filt_vocab = dict(vocab_refined)
+
+        if self.__method == 'MaxByRest':
+            print 'entered the maxbyrest method'
+            #this will temporarily store the refined vocabulary
+            vocab_refined = {}
+
+            #filling the word count dictionary if not already filled
+            if self.__word_count_flag == False:
+                self.__fillWordCount()
+
+            #calculating the max by rest scores for each word
+            scoreDict = self.__getMaxByRestScores()
+
+            #sorting the scores in descending order and maintaining the
+            #corresponding order of keys
+            temp_scores = sorted(scoreDict.items(), key = operator.itemgetter(1)
+                                , reverse = True)
+
+            #storing the vocabulary with highest scores
+            print(self.__D)
+            for i in range(self.__D):
+                #print(i)
+                vocab_refined[temp_scores[i][0]] = 0
+            #print(len(vocab_refined.keys()))
+
+            #setting the filtered vocabulary
+            self.__filt_vocab = dict(vocab_refined)
+            #print('print length of keys, ', len(self.__filt_vocab.keys()))
+
+        #writing filtered vocabulary in a text file if asked by the user
+        if self.__write == True:
+            self.__writeFilteredVocab()
+
+    ########################END OF HELPER FUNCTIONS#############################
+
+    def getVocab(self):
+
+        print 'entered get vocab public function'
+        #populating the filt_vocab list
+        self.__getFiltVocab()
+
+        return self.__filt_vocab
+
+    def setMethod(self, method):
+        self.__method = method
+
+#################################END OF CLASS VOCAB EXTRACTOR###################
