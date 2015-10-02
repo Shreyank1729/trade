@@ -1,0 +1,98 @@
+% clc ;clear;
+% %Importing Data
+% Yield=0;
+% N=115339;j=0;
+% M=zeros(N,17);
+% M_min=zeros(3139,17);
+% M=importdata('data_001.csv');
+% %%
+% % Creating Matrix with abs(min-moneyness) for each day
+% M_date=zeros(N,1);
+% M_date=M(:,1);
+% temp=zeros(N,1);
+% for i=1:N-1
+%     temp(i)=M(i,17);
+%     if(M_date(i+1)==M_date(i))
+%         temp(i+1)=M(i+1,17);
+%     else
+%         j=j+1;
+%         e=find(temp);
+%         [a b]=min(abs(temp(e(1):e(end))));
+%         index(j)=(e(1)+b-1);       
+%         temp=zeros(N,1);
+%     end
+% end
+% M_min=M(index,:);
+% csvwrite('data_nr.csv',M_min)
+% %%
+% %Dividing Data in 15 parts based on moneyness and time of maturity
+% %short<=30;30<medium<60;long>=90;
+% M_mat=M(:,16);
+% M_mon=M(:,17);
+% t1=0.05;tn1=-0.05;t2=0.15;tn2=-0.15;
+% t_long=find(M_mat>=60);t_medium=find(30<M_mat<60);t_short=find(M_mat<=30);
+% m_do=find(M_mon<tn2);m_o=find(tn2<=M_mon&M_mon<tn1);m_a=find(tn1<=M_mon&M_mon<=t1);m_i=find(t1<M_mon&M_mon<=t2);m_di=find(M_mon>=t2);
+% %%
+% % M_1a=intersect(t_short,m_do);
+% % D_1a=M(M_1a,:);
+% % csvwrite('D_1a.csv',D_1a)
+% % M_1b=intersect(t_short,m_o);
+% % D_1b=M(M_1b,:);
+% % csvwrite('D_1b.csv',D_1b)
+% % M_1c=intersect(t_short,m_a);
+% % D_1c=M(M_1c,:);
+% % csvwrite('D_1c.csv',D_1c)
+% % M_1d=intersect(t_short,m_i);
+% D_1d=M(M_1d,:);
+% csvwrite('D_1d.csv',D_1d)
+% M_1e=intersect(t_short,m_di);
+% D_1e=M(M_1e,:);
+% csvwrite('D_1e.csv',D_1e)
+% %%
+% M_2a=intersect(t_medium,m_do);
+% D_2a=M(M_2a,:);
+% csvwrite('D_2a.csv',D_2a)
+% M_2b=intersect(t_medium,m_o);
+% D_2b=M(M_2b,:);
+% csvwrite('D_2b.csv',D_2b)
+% M_2c=intersect(t_medium,m_a);
+% D_2c=M(M_2c,:);
+% csvwrite('D_2c.csv',D_2c)
+% M_2d=intersect(t_medium,m_i);
+% D_2d=M(M_2d,:);
+% csvwrite('D_2d.csv',D_2d)
+% M_2e=intersect(t_medium,m_di);
+% D_2e=M(M_2e,:);
+% csvwrite('D_2e.csv',D_2e)
+% %%
+% M_3a=intersect(t_long,m_do);
+% D_3a=M(M_3a,:);
+% csvwrite('D_3a.csv',D_3a)
+% M_3b=intersect(t_long,m_o);
+% D_3b=M(M_3b,:);
+% csvwrite('D_3b.csv',D_3b)
+% M_3c=intersect(t_long,m_a);
+% D_3c=M(M_3c,:);
+% csvwrite('D_3c.csv',D_3c)
+% M_3d=intersect(t_long,m_i);
+% D_3d=M(M_3d,:);
+% csvwrite('D_3d.csv',D_3d)
+% M_3e=intersect(t_long,m_di);
+% D_3e=M(M_3e,:);
+% % csvwrite('D_3e.csv',D_3e)
+% %%
+% %Newton Raphson Method for implied Volatility
+%  for i=1:3139
+%      a(i)=New_Rap_V(M_min(i,4),M_min(i,15),M_min(i,3), 0.0, (M_min(i,16)/365),M_min(i,8))
+%      i
+%      
+%  end
+%  M1=importdata('data_nr.csv');
+%  for i=1:3139
+%       M1(i,18)=a(i)
+%  end
+% csvwrite('M_1.csv',M1)
+% 
+%  
+f=fopenf('1.txt',r);
+
