@@ -1,0 +1,204 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu May 07 12:35:50 2015
+
+@author: Shreyank
+"""
+#importing useful libraries
+import os
+import nltk
+import re
+import shutil
+
+#NOTE = WHENEVER PROVIDING A PATH OF A DIRECTORY, END IT WITH A '/'
+
+#this class reads raw data from txt files and stores the corresponding processed
+#data in new txt files
+class preProcessorTxt(object):
+
+    #constructor for the class, takes various arguments for generality
+    def __init__(self, num_classes = 2, labels = ('pos', 'neg'),
+                 rp = '../raw_data/', wp = '../processed_data/', op = '../output/'
+                 , stem = True, stpf= True):
+        #storing the labels and number of classes
+        self.__labels = labels
+        self.__W = num_classes
+
+        #base path for reading raw data
+        self.__base_path_read = rp
+        #tihs stores all the file names for all the classes, to be read
+        self.__f_names_read = self.__getFileNames(self.__base_path_read)
+
+        #base path for writing processed data
+        self.__base_path_write = wp
+
+        #setting the output directory for vocabulary
+        self.__op = op
+
+        #storing the stem flag
+        self.__stem = stem
+
+        #defining snowball stemmer
+        self.__stemmer = nltk.stem.snowball.SnowballStemmer('english', ignore_stopwords = True)
+
+        #setting the flag for deicding wheteher to remove stop words
+        self.__stop_flag = stpf
+
+        #if the stop words need to be removed then importing the list
+        if self.__stop_flag == True:
+            self.__stop = nltk.corpus.stopwords.words('english')
+        #converting the list to a dictonary for faster lookup
+            self.__stop = dict((word, 0) for word in self.__stop)
+    ###############################END OF CONSTRUCTOR####################
+
+
+    #helper function for getting all the file names for all classes
+    def __getFileNames(self, base_path):
+        #local instant of all the file names
+        file_names = []
+
+        #going through all the possible classes
+        for i in range(self.__W):
+
+            #setting the path for a particular class
+            path = base_path + self.__labels[i]
+
+            #getting al the file names of a class as a list
+            temp = os.listdir(path)
+            temp = [path + '/' + name for name in temp]
+
+            #appending the file names for a class
+            file_names.append(temp)
+
+        return file_names
+
+    #returns all the data in the form on one long string
+    def __getFullText(self):
+        #the variable to store the long text
+        full_text = ''
+
+        #going through each class
+        for i in range(self.__W):
+
+            #going through each file in the class
+            for j in range(len(self.__f_names_read[i])):
+                with open(self.__f_names_read[i][j]) as f:
+                    full_text = full_text + f.read()
+
+        return full_text
+
+    #applies all the processing steps to a given txt file
+    def __process(self, review, lst_format = False):
+
+        #tokenizing
+        tokens = nltk.word_tokenize(review)
+
+        #removing stop words if need be
+        if self.__stop_flag == True:
+            temp_tokens = []
+            for token in tokens:
+                if not self.__stop.has_key(token):
+                    temp_tokens.append(token)
+            tokens = temp_tokens[:]
+            del temp_tokens
+
+        #converting reviews back to a string for further operations
+        token_text = ' '.join(tokens)
+
+        #removing non alphabetic characters
+        token_text = re.sub(r'[^a-z ]', '', token_text)
+
+        #taking care of not, first converting nt's to not
+        token_text = re.sub(r' +nt +', ' not ', token_text)
+
+        #if stem flag is set then stemming using the stemmer defined in construct
+        if self.__stem == True:
+
+            #temporary variable for storing the words
+            new_tokens = []
+
+            #again converting string to list of words for stemming
+            tokens = nltk.word_tokenize(token_text)
+            #going through each word and stemming it
+            for token in tokens:
+                new_tokens.append(self.__stemmer.stem(token))
+            #changing back to the desired string format
+            token_text = ' '.join(new_tokens)
+
+        #if list format is asked then tokens will be returned
+        if lst_format == False:
+            return token_text
+        else:
+            if self.__stem == True:
+                return new_tokens
+            else:
+                return token_text.split()
+
+        #reutnr null in case of an error
+        return ''
+    ####################END OF HELPER FUNCTIONS##########################
+
+    #proceses each text file and writes corresponding output file
+    def storeProcessedData(self):
+
+        #if the path exists the overwrite otherwise create
+        if not os.path.exists(self.__base_path_write):
+            os.makedirs(self.__base_path_write)
+        else:
+            shutil.rmtree(self.__base_path_write)
+            os.makedirs(self.__base_path_write)
+
+        #go through each class
+        for i in range(self.__W):
+            #the writing path for each class
+            write_dir = self.__base_path_write + self.__labels[i] + '/'
+
+            #if the path exists the overwrite otherwise create
+            if not os.path.exists(write_dir):
+                os.makedirs(write_dir)
+            else:
+                shutil.rmtree(write_dir)
+                os.makedirs(write_dir)
+
+            #going through each file in a class
+            for j in range(len(self.__f_names_read[i])):
+                print 'wrting text for i, j = ', i, j
+
+                #reading the file for processing
+                with open(self.__f_names_read[i][j], 'r') as f:
+                    raw_text = f.read()
+
+                #using helper function to process the raw review or text
+                processed_text = self.__process(raw_text)
+
+                #setting the file name and path for writing
+                write_path = write_dir + self.__labels[i] + str(j) + '.txt'
+
+                #storing the processed text in a txt file
+                with open(write_path, 'w') as f:
+                    f.write(processed_text)
+
+    #extracts the vocabulary list
+    def extractVocab(self):
+        #getting the whole data as one string (un processed)
+        data = self.__getFullText()
+
+        file_path = self.__op + 'vocabulary.txt'
+
+        if not os.path.exists(file_path):
+                os.makedirs(file_path)
+
+        #processing the whole data
+        print 'started processing the big thing'
+        data = self.__process(data, lst_format = True)
+        print 'ended processing the big thing'
+
+        #getting the set of unique words
+        vocabulary = set(data)
+
+        #writing the vocabulary list in the vocabulary txt file
+        with open(file_path, 'w') as f:
+            f.write('\n'.join(vocabulary))
+
+        return len(vocabulary)
+####################END OF FILE##################################################
